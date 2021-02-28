@@ -2,4 +2,4 @@ TLoaderHeatmap.root
 Data/
 *~
 *.out
-*.csv
+Deltacount*

@@ -1,2 +1,5 @@
 TLoaderHeatmap.root
 Data/
+*~
+*.out
+*.csv

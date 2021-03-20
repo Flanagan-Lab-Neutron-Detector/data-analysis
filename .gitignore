@@ -1,5 +1,8 @@
-TLoaderHeatmap.root
-Data/
+*.root
+data/
 *~
 *.out
-Deltacount*
+*.err
+plots/
+*.csv
+!sectorPositionMappingPart718.csv

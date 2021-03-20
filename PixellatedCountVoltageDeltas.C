@@ -1,5 +1,4 @@
-//#include "TSystem.h"
-
+//#include "TSystem.h
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -9,6 +8,7 @@
 #include <utility> // std::pair
 #include <numeric>
 #include <map> 
+#include "mpi.h" 
 
 using namespace std;
 
@@ -123,8 +123,10 @@ vector<vector<int>> countVoltageDeltasByPixel(const char* file, int minVoltage, 
     // Bin pixels in right bins
     int x_phy = (data["1"][i] % sector_width); // x_phy and y_phy in the file come from a rotated system. Rotate back.
     int y_phy = data["0"][i] % sector_height;
+    int V_initial = data["2"][i];
+    int V_final = data["3"][i];
     int delta = data["4"][i];
-    if(delta > minVoltage) {
+    if(delta > minVoltage && 3500 < V_initial && V_initial < 6400 && 3500 < V_final && V_final < 6400) {
       deltaCounts[x_phy / (sector_width / pix_per_sec_x)][y_phy / (sector_height / pix_per_sec_y)]++;
     }
   }
@@ -191,15 +193,18 @@ void writePixelDeltasAndPositions(const char* sectorPositionMapping, std::string
     sectorMap["sec_y"][i] += yPartOffset + yGapOffset;
   }
 
+  std::vector<int> sectorList = {}; // Want to print sectors, too...
   for(int i=0; i<pixelDeltaCounts["pix_x"].size(); i++) {
     // Now position pixels according to their sector
     int sector = pixelDeltaCounts["sector"][i];
     pixelDeltaCounts["pix_x"][i] += pix_per_sec_x * sectorMap["sec_x"][sector];
     pixelDeltaCounts["pix_y"][i] += pix_per_sec_y * sectorMap["sec_y"][sector];
+    sectorList.push_back(sector);
   }
   
   // Write sector info and delta counts to file
   std::vector<std::pair<std::string, std::vector<int>>> vals = {
+    {"sector",sectorList},
     {"pix_x",pixelDeltaCounts["pix_x"]},
     {"pix_y",pixelDeltaCounts["pix_y"]},
     {"Deltacount",pixelDeltaCounts["delta_count"]}
@@ -251,24 +256,31 @@ map<string,vector<int>> pixelDeltasForPart(int n, int minVoltageDelta, int pix_p
 }
 
 int main(){
-  int partNumbers[] = { 109 };
+  int partNumbers[] = { 37, 47, 57, 62, 73, 79, 82, 85, 91, 98, 100, 103, 110, 114, 115, 125, 109 };
   int minVoltageDelta = 250;
   bool noisy = true;
   int pix_per_sec_x = 16;
   int pix_per_sec_y = 1;
   const char* sectorPositionMapping = "sectorPositionMappingPart718.csv";
 
-  // For each part
-  for(const int &partno : partNumbers){
+  // Run on different parts in parallel.
+  int MPIprocessNumber;
+  MPI_Init(NULL, NULL);
+  MPI_Comm_rank(MPI_COMM_WORLD, &MPIprocessNumber);
 
-    char outfilename[20];
-    sprintf(outfilename,"PixelDeltacount300_for_%d.csv", partno);
-    string outfile = outfilename;
+  // Run only on precisely the part corresponding to this MPI process.
+  int partno = partNumbers[MPIprocessNumber];
+
+  char outfilename[40];
+  sprintf(outfilename,"./data/PixelDeltacount300_for_%d.csv", partno);
+  string outfile = outfilename;
     
-    cout<<"Part # "<<partno<<endl; 
+  cout<<"Part # "<<partno<<endl; 
     
-    map<string,vector<int>> dcountmap = pixelDeltasForPart(partno, minVoltageDelta, pix_per_sec_x, pix_per_sec_y, noisy);
+  map<string,vector<int>> dcountmap = pixelDeltasForPart(partno, minVoltageDelta, pix_per_sec_x, pix_per_sec_y, noisy);
     
-    writePixelDeltasAndPositions(sectorPositionMapping, outfile, dcountmap, partno, pix_per_sec_x, pix_per_sec_y, noisy);
-  }
+  writePixelDeltasAndPositions(sectorPositionMapping, outfile, dcountmap, partno, pix_per_sec_x, pix_per_sec_y, noisy);
+  
+  // Kill MPI after all files have been written out.
+  MPI_Finalize();
 }

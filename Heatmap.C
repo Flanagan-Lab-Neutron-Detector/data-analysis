@@ -18,9 +18,9 @@
   gStyle->SetTitleSize(0.05,"XY");
   gStyle->SetTitleOffset(.8, "XY");
   gStyle->SetTitleX(0.5);
-  gStyle->SetTitleAlign(23);   
+  gStyle->SetTitleAlign(23);
 
-
+ 
   TCanvas * c1 = new TCanvas("c1", "c1", 1375,1645);
   //c1->SetRightMargin(0.125);
   // c1->SetLeftMargin(0.10);
@@ -32,16 +32,16 @@
   legend2->SetBorderSize(0);
 
 
-  TH2D * h2 = new TH2D("hhD", "Heatmap of BeamProfile", 80,0,79, 872, 0, 871); 
+  TH2D * h2 = new TH2D("hhD", "Heatmap of BeamProfile", 80,0,79, 872, 0, 871);
   ntuple->Draw("sec_y:sec_x>>hhD","DeltaCount","colz");
- 
+
   h2 ->GetXaxis()->SetTitle("x [cm]");
   h2->GetXaxis()->SetLimits(0.0,4.4);
   h2 ->GetYaxis()->SetTitle("y [cm]");
   h2->GetYaxis()->SetLimits(0.0,5.2);
   h2->GetXaxis()->CenterTitle();
   h2->GetYaxis()->CenterTitle();
- 
+
   // h2->GetZaxis()->SetTitle("Count of Delta >300mv");
   // h2->GetZaxis()->SetTitleOffset(1.8);
 
@@ -54,7 +54,7 @@
   TCanvas *xProjectionCanvas = new TCanvas("xProjectionCanvas", "xProjectionCanvas", 600, 600);
   TCanvas *yProjectionCanvas = new TCanvas("yProjectionCanvas", "yProjectionCanvas", 600, 600);
   gStyle->SetOptStat(0);
-  
+
   TH1D *projh2x = h2->ProjectionX();
 
   TH1D *projh2y = h2->ProjectionY();
@@ -130,10 +130,10 @@
   printf("yFWHM: %e\n", yFWHM);
 
   printf("\ndistribution maxima: %e, %e\n", xmax, ymax);
-  
+
   /*
     TCanvas *c2 = new TCanvas("c2","c2",800,800);
-  
+
     c2->SetLeftMargin(.15);
 
 
@@ -141,11 +141,11 @@
     legend3->SetTextSize(.05);
     legend3->SetFillColor(0);
     legend3->SetBorderSize(0);
-    h2 ->GetXaxis()->SetTitleOffset(1.4); 
+    h2 ->GetXaxis()->SetTitleOffset(1.4);
     h2 ->GetYaxis()->SetTitleOffset(1.4);
 
     ntuple->Draw("sec_y:sec_x>>hhD","DeltaCount","lego1");
- 
+
     legend3->Draw("same");
 
     gPad->SetTheta(30);

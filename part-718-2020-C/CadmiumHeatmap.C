@@ -2,7 +2,7 @@ void CadmiumHeatmap(){
   TFile *f = new TFile("TLoaderHeatmap.root","RECREATE");
   // TH1F *h1 = new TH1F("h1","x distribution",100,-4,4);
   TTree *T = new TTree("ntuple","data from ascii file");
-  Long64_t nlines = T->ReadFile("PixelDeltacount300_for_109.csv","sector:pix_x:pix_y:Deltacount");
+  Long64_t nlines = T->ReadFile("data/Sector1highlight.csv","sector:pix_x:pix_y:Deltacount");
   // Long64_t nlines = T->ReadFile("Deltacount300_for_all.csv","sector:sec_x:sec_y:partno");
 
   printf(" found %lld points\n",nlines);
@@ -22,13 +22,13 @@ void CadmiumHeatmap(){
   c1->SetBottomMargin(0.10);
 
   //pcenter->cd();
-  TLegend* legend2 = new TLegend(0.16,0.91,0.54,0.97,"Bits Shifted at or Beyond 300mV","NDC");
+  TLegend* legend2 = new TLegend(0.16,0.91,0.54,0.97,"Sector 1 red","NDC"); // "Bits shifted at or beyond 300 mV"
   legend2->SetTextSize(.05);
   legend2->SetFillColor(0);
   legend2->SetBorderSize(0);
 
 
-  TH2D * h2 = new TH2D("hhD", "Heatmap of BeamProfile", 320, 0, 319, 218, 0, 217); 
+  TH2D * h2 = new TH2D("hhD", "Sector 1 red", 320, 0, 319, 218, 0, 217); // "Beam profile heatmap"
   ntuple->Draw("pix_y:pix_x>>hhD","Deltacount","colz");
  
   h2 ->GetXaxis()->SetTitle("x [cm]");
@@ -39,5 +39,5 @@ void CadmiumHeatmap(){
   h2->GetYaxis()->CenterTitle();
  
   legend2->Draw("same");
-  c1->SaveAs("./plots/CadmiumHeatmap.pdf");
+  c1->SaveAs("./plots/Sector1Highlight.pdf");
 }

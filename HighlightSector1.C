@@ -1,5 +1,4 @@
-//#include "TSystem.h"
-
+//#include "TSystem.h
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -9,6 +8,7 @@
 #include <utility> // std::pair
 #include <numeric>
 #include <map> 
+//#include "mpi.h" 
 
 using namespace std;
 
@@ -30,6 +30,7 @@ void print(std::vector <int> const & pn) {
 void write_csv(std::string filename, std::vector<std::pair<std::string, std::vector<int>>> dataset){
   // Create an output filestream object
   std::ofstream myFile(filename);
+  cout << "Writing file: " << filename << "\n";
 
   // Send column names to the stream
   for(int j = 0; j < dataset.size(); j++)
@@ -38,6 +39,8 @@ void write_csv(std::string filename, std::vector<std::pair<std::string, std::vec
       if(j != dataset.size() - 1) myFile << ","; // No comma at end of line
     }
   myFile << "\n";
+
+  cout << "wrote headers\n";
 
   // Send data to the stream
   for(int i = 0; i < dataset.at(0).second.size(); ++i)
@@ -77,11 +80,17 @@ std::map<std::string, std::vector<int>> read_csv(std::string filename, bool skip
   stringstream ss(line);
   string head;
   vector<string> heads;
-  while(getline(ss,head)){
+  while(getline(ss, head, ',')){
     dataset[head] = {};
     heads.push_back(head);
   }
-
+  if(noisy) {
+    std::cout << "read headers {";
+    for(auto head : heads) {
+      std::cout << head << ",";
+    }
+    std::cout << "}\n";
+  }
   // Read line by line
   while(getline(csv, line)){
     stringstream ss(line);
@@ -101,26 +110,38 @@ std::map<std::string, std::vector<int>> read_csv(std::string filename, bool skip
   return dataset;
 }
 
-// Read the voltage deltas from a file. Return a vector of voltage deltas.
-vector<int> readVoltageDeltas(const char* file, bool noisy){
+vector<vector<int>> countVoltageDeltasByPixel(const char* file, int minVoltage, int pix_per_sec_x, int pix_per_sec_y, bool noisy) {
   bool skipHeaders = true;
   std::map<string, std::vector<int>> data = read_csv(file, skipHeaders, noisy);
   
-  // Return voltage deltas.
-  // NOTE: To read from a raw data file in NETL_second_trip, use
-  // "0": x_phys | "1": y_phys | "2": v_init | "3": v_final | "4": delta
-  return data["4"];
-}
-
-// Count the voltage deltas greater than minVoltage
-//  ... in the file "file"
-int countVoltageDeltas(const char* file, int minVoltage, bool noisy){
-  int count = 0;
-  vector<int> deltaCounts = readVoltageDeltas(file, noisy);
-  for (const int& delta : deltaCounts) {
-    count += delta > minVoltage ? 1 : 0;
+  int sector_width  = 256*16;
+  int sector_height = 256;
+  
+  // Initialize a 2-D array of pixels with all zeroes
+  vector<vector<int>> deltaCounts(pix_per_sec_x, vector<int>(pix_per_sec_y, 0));
+  for(int i=0; i < data["0"].size(); i++) {
+    // Bin pixels in right bins
+    int x_phy = (data["1"][i] % sector_width); // x_phy and y_phy in the file come from a rotated system. Rotate back.
+    int y_phy = data["0"][i] % sector_height;
+    int V_initial = data["2"][i];
+    int V_final = data["3"][i];
+    int delta = data["4"][i];
+    if(delta > minVoltage && 3500 < V_initial && V_initial < 6400 && 3500 < V_final && V_final < 6400) {
+      deltaCounts[x_phy / (sector_width / pix_per_sec_x)][y_phy / (sector_height / pix_per_sec_y)]++;
+    }
   }
-  return count;
+
+  // Print all counts
+  if(noisy) {
+    for(int y=0; y < deltaCounts[0].size(); y++) {
+      for(int x=0; x < deltaCounts.size(); x++) {
+	cout<<deltaCounts[x][y]<<"|";
+      }
+      cout<<"\n------------------------------------------\n";
+    }
+  }
+
+  return deltaCounts;
 }
 
 // Compute offsets based on part number for heatmap drawing.
@@ -153,12 +174,12 @@ std::pair<int,int> offsetsForPart(int n) {
   return { xadd, yadd };
 }
 
-void writeDeltasAndPositions(const char* sectorPositionMapping, std::string outfile, vector<int> DeltaCount, int partno, bool noisy){
+void writePixelDeltasAndPositions(const char* sectorPositionMapping, std::string outfile, map<string,vector<int>> pixelDeltaCounts, int partno, int pix_per_sec_x, int pix_per_sec_y, bool noisy){
   // Read sector positions from file
-  bool skipHeaders = true;
+  bool skipHeaders = false;
   std::map<string, std::vector<int>> sectorMap = read_csv(sectorPositionMapping, skipHeaders, noisy);
-  vector<int> pn;
   for(int i=0; i < sectorMap["sector"].size(); i++) {
+
     // Offset sec_x and sec_y depending on part number
     std::pair<int,int> offsets = offsetsForPart(partno);
     int xPartOffset = offsets.first;
@@ -170,68 +191,96 @@ void writeDeltasAndPositions(const char* sectorPositionMapping, std::string outf
     // Apply offsets
     sectorMap["sec_x"][i] += xPartOffset;
     sectorMap["sec_y"][i] += yPartOffset + yGapOffset;
-    pn.push_back(partno);
   }
+
+  std::vector<int> sectorList = {}; // Want to print sectors, too...
+  for(int i=0; i<pixelDeltaCounts["pix_x"].size(); i++) {
+    // Now position pixels according to their sector
+    int sector = pixelDeltaCounts["sector"][i];
+    pixelDeltaCounts["pix_x"][i] += pix_per_sec_x * sectorMap["sec_x"][sector];
+    pixelDeltaCounts["pix_y"][i] += pix_per_sec_y * sectorMap["sec_y"][sector];
+    sectorList.push_back(sector);
+  }
+  
   // Write sector info and delta counts to file
   std::vector<std::pair<std::string, std::vector<int>>> vals = {
-    {"sector",sectorMap["sector"]},
-    {"sec_x",sectorMap["sec_x"]},
-    {"sec_y",sectorMap["sec_y"]},
-    {"Deltacount",DeltaCount},
-    {"partno",pn}
+    {"sector",sectorList},
+    {"pix_x",pixelDeltaCounts["pix_x"]},
+    {"pix_y",pixelDeltaCounts["pix_y"]},
+    {"Deltacount",pixelDeltaCounts["delta_count"]}
   };
   write_csv(outfile, vals);
 }
 
-vector<int> countDeltasForPart(int n, int minVoltageDelta, bool noisy){
-  // Read from data directory
+
+map<string,vector<int>> pixelDeltasForPart(int n, int minVoltageDelta, int pix_per_sec_x, int pix_per_sec_y, bool noisy){
+  // Construct file name
   string dir = "/work/03069/whf346/lonestar/NISC_data/NETL_second_trip/";
   char cut[20];
   sprintf(cut,"Combined_%04d_",n);
   string base = cut;
   string ext = ".csv";
-  vector<int> deltaCountPerSector; 
-     
+
+  // Set up output map
+  map<string,vector<int>> pixelDeltas = {{"sector", {}}, {"pix_x", {}}, {"pix_y", {}}, {"delta_count", {}}};     
+  // Loop over sectors
   for(int i = 0; i < 2048; i++){    
-    // Generate correct filename
+    // Add sector number to file name
     char sNum[10];
     sprintf(sNum,"%04d",i);
     string f = dir + base + sNum + ext;
     const char* filename = f.c_str();
 
-    int dcount;
-    // Only read first n sectors
+    // Read from file
     int nSectors = 2048;
-    dcount = i == 1 ? 10 : 0; //< nSectors ? countVoltageDeltas(filename, minVoltageDelta, noisy) : 0;
+    vector<vector<int>> defaultCounts(pix_per_sec_x, vector<int>(pix_per_sec_y, 10));
+    vector<vector<int>> highCounts(pix_per_sec_x, vector<int>(pix_per_sec_y, 20));
+    vector<vector<int>> dcounts = i == 1 ? highCounts : defaultCounts; //< nSectors ? countVoltageDeltasByPixel(filename, minVoltageDelta, pix_per_sec_x, pix_per_sec_y, noisy) : defaultCounts;
     
-    // Comforting output. This process can take a while.
-    if (noisy){
-      cout<<"Deltacount is " << dcount << "\n";
+    // Some data is upside down. Explanation pending, but the condition should work and is documented in JR's slides
+    if (((i / 128) % 2 == 0) != (i % 2 == 0)) {
+      reverse(dcounts.begin(),dcounts.end());
     }
-    deltaCountPerSector.push_back(dcount);
+    // Write to map
+    for(int x=0; x < dcounts.size(); x++) {
+      for(int y=0; y < dcounts[x].size(); y++) {
+	pixelDeltas["sector"].push_back(i);
+	pixelDeltas["pix_x"].push_back(x);
+	pixelDeltas["pix_y"].push_back(y);
+	pixelDeltas["delta_count"].push_back(dcounts[x][y]);
+      }
+    }
   }
 
-  return deltaCountPerSector;
+  return pixelDeltas;
 }
 
 int main(){
-  int partNumbers[] = { 109 };
+  //int partNumbers[] = { 37, 47, 57, 62, 73, 79, 82, 85, 91, 98, 100, 103, 110, 114, 115, 125, 109 };
   int minVoltageDelta = 250;
   bool noisy = true;
+  int pix_per_sec_x = 16;
+  int pix_per_sec_y = 1;
   const char* sectorPositionMapping = "sectorPositionMappingPart718.csv";
 
-  // For each part
-  for(const int &partno : partNumbers){
+  // Run on different parts in parallel.
+  //int MPIprocessNumber;
+  //MPI_Init(NULL, NULL);
+  //MPI_Comm_rank(MPI_COMM_WORLD, &MPIprocessNumber);
 
-    char outfilename[20];
-    sprintf(outfilename,"Deltacount300_for_%d.csv", partno);
-    string outfile = outfilename;
+  // Run only on precisely the part corresponding to this MPI process.
+  int partno = 0; // partNumbers[MPIprocessNumber];
 
-    cout<<"Part # "<<partno<<endl; 
-    vector<int> DeltaCount = countDeltasForPart(partno, minVoltageDelta, noisy);
-
-    print(DeltaCount);
-
-    writeDeltasAndPositions(sectorPositionMapping, outfile, DeltaCount, partno, noisy);
-  }
+  char outfilename[40];
+  sprintf(outfilename,"./data/Sector1highlight.csv", partno);
+  string outfile = outfilename;
+    
+  cout<<"Part # "<<partno<<endl; 
+    
+  map<string,vector<int>> dcountmap = pixelDeltasForPart(partno, minVoltageDelta, pix_per_sec_x, pix_per_sec_y, noisy);
+    
+  writePixelDeltasAndPositions(sectorPositionMapping, outfile, dcountmap, partno, pix_per_sec_x, pix_per_sec_y, noisy);
+  
+  // Kill MPI after all files have been written out.
+  //MPI_Finalize();
 }

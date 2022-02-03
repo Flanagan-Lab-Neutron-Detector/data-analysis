@@ -14,7 +14,7 @@ def get_sector_data(location, fbase, sector, vstart, vstop, vstep):
     for voltage in range(vstart, vstop, vstep):
         new_bits = get_bits(location, fbase.format(voltage,sector))
         for i,bit in enumerate(bits):
-            if bit != new_bits[i]:
+            if bit == 0 and new_bits[i] == 1:
                 data[i] = voltage
         bits = new_bits
     return data

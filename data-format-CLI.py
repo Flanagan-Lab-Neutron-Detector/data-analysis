@@ -3,6 +3,7 @@ import os
 import numpy as np
 from argparse import ArgumentParser
 import time
+import matplotlib.pyplot as plt
 
 # Helper function for displaying time prettily
 def formatted_time(t):
@@ -60,34 +61,47 @@ def write_sector_data(location, fbase, sector, data):
 # read a 1 at min voltage--record min voltage
 # read a 0 at max voltage--record voltage above
 # read a 1 and then a 0--print a warning, ignore any 1s before the 0. 
-def convert_files(input_directory, basename, output_directory, filename, vstart, vstop, vstep, sectors):
+def convert_files(input_directory, basename, output_directory, filename, voltages, sectors, record_bit_flips):
     
-    printProgressBar(0, ((vstop-vstart)/vstep)*len(sectors), prefix='Converting data files: ', suffix='complete', decimals=0, length=50)
+    printProgressBar(0, len(voltages)*len(sectors), prefix='Converting data files: ', suffix='complete', decimals=0, length=50)
     count = 0
+
+    back_flip_counts = np.zeros(len(voltages))
+    front_flip_counts = np.zeros(len(voltages))
     
     for sector in sectors:
         old_bits = np.zeros(2**20,dtype=int)
         data = np.zeros(2**20,dtype=int)
         # loop over voltages
-        for voltage in range(vstart, vstop, vstep):
-            bad_bit_count = 0
+        for v, voltage in enumerate(voltages):
+            back_flip_count = 0
+            front_flip_count = 0
             new_bits = get_bits(input_directory, basename.format(voltage,sector))
             for i in range(len(old_bits)):
                 if old_bits[i] == 0 and new_bits[i] == 1:
                     data[i] = voltage
+                    front_flip_count += 1
                 elif old_bits[i] == 1 and new_bits[i] == 0:
-                    bad_bit_count += 1
-                elif voltage == vstop - vstep and old_bits[i] == 0:
-                    data[i] = vstop
+                    back_flip_count += 1
+                elif voltage == voltages[-1] and old_bits[i] == 0:
+                    data[i] = 2*voltages[-1] - voltages[-2] # = vstop 
             old_bits = new_bits
 
-            if bad_bit_count > 0:
-                print(f"Warning: {bad_bit_count} bits were caught flipping in the wrong direction. These bad flips will be ignored.")
+            back_flip_counts[v] += back_flip_count
+            front_flip_counts[v] += front_flip_count
             
-            printProgressBar(count, ((vstop-vstart)/vstep)*len(sectors), prefix='Converting data files: ', suffix='complete', decimals=0, length=50)
+            printProgressBar(count, len(voltages)*len(sectors), prefix='Converting data files: ', suffix='complete', decimals=0, length=50)
             count+=1
         write_sector_data(output_directory, filename, sector, data)
 
+    if record_bit_flips:
+
+        #plt.figure()
+        #plt.plot(voltages, front_flip_counts, 'g', label='number of bits flipping from 0 to 1')
+        #plt.plot(voltages, back_flip_counts, 'r', label='number of bits flipping from 1 to 0')
+        #plt.legend()
+        #plt.savefig(os.path.join(output_directory, 'bit-flips-by-voltage.png'))
+    
 # CLI spec
 parser = ArgumentParser(description="CLI for converting bitwise data files to csv voltage files")
 
@@ -101,6 +115,7 @@ parser.add_argument('--step', type=int, required=True, help='the granularity in 
 parser.add_argument('--sectors', type=int, nargs='+', help='the sector numbers to process')
 parser.add_argument('--all-sectors', action='store_true', help='read entire chip')
 parser.add_argument('--last-sector', type=int, required=False, default=(2**26-2**16), help='the sector number of the last sector to attempt reading--use in cases of incomplete data')
+parser.add_argument('--record-flips', action='store_true', help='record bit flips and directions by voltage')
 
 args = parser.parse_args()
 
@@ -112,8 +127,10 @@ if args.sectors and args.all_sectors:
 
 os.mkdir(args.output_directory)
 
+voltages = list(range(args.start, args.stop, args.step))
+
 if args.all_sectors:
     sectors = range(0, args.last_sector+2**16, 2**16)
 else:
     sectors = args.sectors
-convert_files(args.input_directory, args.basename, args.output_directory, args.filename, args.start, args.stop, args.step, args.sectors)
+convert_files(args.input_directory, args.basename, args.output_directory, args.filename, voltages, args.sectors, args.record_flips)

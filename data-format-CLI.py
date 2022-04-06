@@ -61,8 +61,7 @@ def write_sector_data(location, fbase, sector, data):
 # read a 1 at min voltage--record min voltage
 # read a 0 at max voltage--record voltage above
 # read a 1 and then a 0--print a warning, ignore any 1s before the 0. 
-def convert_files(input_directory, basename, output_directory, filename, voltages, sectors, record_bit_flips):
-    
+def convert_files(input_directory, basename, output_directory, filename, voltages, vstep, sectors, record_bit_flips):
     printProgressBar(0, len(voltages)*len(sectors), prefix='Converting data files: ', suffix='complete', decimals=0, length=50)
     count = 0
 
@@ -84,7 +83,7 @@ def convert_files(input_directory, basename, output_directory, filename, voltage
                 elif old_bits[i] == 1 and new_bits[i] == 0:
                     back_flip_count += 1
                 elif voltage == voltages[-1] and old_bits[i] == 0:
-                    data[i] = 2*voltages[-1] - voltages[-2] # = vstop 
+                    data[i] = voltages[-1] + vstep
             old_bits = new_bits
 
             back_flip_counts[v] += back_flip_count
@@ -107,7 +106,7 @@ parser = ArgumentParser(description="CLI for converting bitwise data files to cs
 
 parser.add_argument('-id', '--input-directory', type=str, default='.', help="the directory containing input files")
 parser.add_argument('-if', '--basename', type=str, required=True, help="the base file name. replace voltage and address with '{}', i.e. TEST1-{}-{}")
-parser.add_argument('-od', '--output-directory', type=str, default='.', help="the directory containing output files")
+parser.add_argument('-od', '--output-directory', type=str, default='formatted-data', help="the directory containing output files")
 parser.add_argument('-of', '--filename', type=str, default='CHIP_VOLTAGES_{}.csv', help="the base output file name. replace address with {}, i.e. CHIP_VOLTAGES_{}.csv")
 parser.add_argument('--start', type=int, required=True, help='the lowest voltage in mV')
 parser.add_argument('--stop', type=int, required=True, help='the highest voltage (plus the step) in mV')
@@ -120,17 +119,21 @@ parser.add_argument('--record-flips', action='store_true', help='record bit flip
 args = parser.parse_args()
 
 
-if not args.sectors or args.all_sectors:
+if not (args.sectors or args.all_sectors):
     parser.error("--sectors or --all-sectors is required")
 if args.sectors and args.all_sectors:
     parser.error("--sectors and --all_sectors are incompatible")
 
-os.mkdir(args.output_directory)
+if os.path.exists(args.output_directory):
+    parser.error("Specified output directory " + args.output_directory + " already exists. \n Writing to an existing directory is disabled to prevent data mishaps. \n Please choose a new name for the directory or delete the existing directory and try again.")
+else:
+    os.mkdir(args.output_directory)
 
 voltages = list(range(args.start, args.stop, args.step))
 
+
 if args.all_sectors:
-    sectors = range(0, args.last_sector+2**16, 2**16)
+    sectors = list(range(0, args.last_sector+2**16, 2**16))
 else:
     sectors = args.sectors
-convert_files(args.input_directory, args.basename, args.output_directory, args.filename, voltages, args.sectors, args.record_flips)
+convert_files(args.input_directory, args.basename, args.output_directory, args.filename, voltages, args.step, sectors, args.record_flips)

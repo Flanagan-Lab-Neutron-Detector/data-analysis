@@ -95,7 +95,7 @@ def convert_files(input_directory, basename, output_directory, filename, voltage
         write_sector_data(output_directory, filename, sector, data)
 
     if record_bit_flips:
-
+        np.savetxt(os.path.join(output_directory, 'bit-flip-counts.csv'), np.column_stack((voltages, front_flip_counts, back_flip_counts)), header='voltage, forward, backward', fmt="%d", delimiter=',') 
         #plt.figure()
         #plt.plot(voltages, front_flip_counts, 'g', label='number of bits flipping from 0 to 1')
         #plt.plot(voltages, back_flip_counts, 'r', label='number of bits flipping from 1 to 0')

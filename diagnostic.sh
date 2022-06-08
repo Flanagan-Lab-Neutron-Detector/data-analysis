@@ -11,9 +11,10 @@ echo "This script takes three new numeric arguments, start, stop (exclusive), an
 echo "voltage #0's" > diagnostic.txt
 for (( v = start; v < stop; v = v+step ))
 do
-    echo -n "$v "
-    grep -o 1 *-${v}-* | wc -l
-done >> diagnostic.txt
+    echo "Processing $v mV"
+    echo -n "$v " >> diagnostic.txt
+    grep -o 1 *-${v}-* | wc -l >> diagnostic.txt
+done
 
 INITIAL_WORKING_DIRECTORY=$(pwd)
 cd "$(dirname "$0")"

@@ -40,6 +40,8 @@ do
 	rm diagnostic_${v}.txt
 done
 
-python3 $script_dir/plot-diagnostic.py ./diagnostic.txt
+cat diagnostic.txt | tail -n +2 | gnuplot -e "set terminal dumb; set nokey; plot '<cat'"
+
+#python3 $script_dir/plot-diagnostic.py ./diagnostic.txt
 
 echo "Done"

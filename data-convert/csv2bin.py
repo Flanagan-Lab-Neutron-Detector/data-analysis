@@ -66,31 +66,36 @@ def convert_voltage(dpath: Path, mv: int, outpath: Path) -> None:
 
     print(f"[Convert] Finished {mv:4d} mV")
 
-if len(argv) < 2:
-    print(f"Usage: {argv[0]} dir")
-    exit(0)
+if __name__ == '__main__':
+    # Is there an arg?
+    if len(argv) < 2:
+        print(f"Usage: {argv[0]} dir")
+        exit(0)
 
-dirpath = Path(argv[1])
-complete = check_voltage_completeness(dirpath)
+    # first arg is directory to check
+    dirpath = Path(argv[1])
+    complete = check_voltage_completeness(dirpath)
 
-if len(argv) > 2:
-    if argv[2] == 'check':
-        print(complete)
-    else:
-        mv = int(argv[2])
-        if mv in complete:
-            convert_voltage(dirpath, mv, dirpath/f"data-{mv:4d}.bin")
+    if len(argv) > 2:
+        # second (optional) arg is either 'check' or a voltage in mV
+        if argv[2] == 'check':
+            print(complete)
         else:
-            print(f"[csv2bin] Data is incomplete for {mv:4d} mV. Exiting.")
-            exit(1)
-else:
-    print(f"[csv2bin] Complete voltages at {str(dirpath)}: {complete}")
-    with Pool(processes=8) as pool:
-        for mv in complete:
-            pool.apply_async(convert_voltage, (dirpath, mv, dirpath/f"data-{mv:4d}.bin",))
-        pool.close()
-        pool.join()
+            mv = int(argv[2])
+            if mv in complete:
+                convert_voltage(dirpath, mv, dirpath/f"data-{mv:4d}.bin")
+            else:
+                print(f"[csv2bin] Data is incomplete for {mv:4d} mV. Exiting.")
+                exit(1)
+    else:
+        # Process directory in parallel
+        print(f"[csv2bin] Complete voltages at {str(dirpath)}: {complete}")
+        with Pool(processes=8) as pool:
+            for mv in complete:
+                pool.apply_async(convert_voltage, (dirpath, mv, dirpath/f"data-{mv:4d}.bin",))
+            pool.close()
+            pool.join()
 
-print("Done")
+    print("Done")
 
 #convert_voltage(dirpath, 6400, dirpath/'data-6400.bin')

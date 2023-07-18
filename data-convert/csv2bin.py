@@ -59,7 +59,11 @@ def convert_voltage(dpath: Path, mv: int, outpath: Path) -> None:
             fpath = dpath / fname
 
             # load text data
-            txtdata = np.loadtxt(fpath, dtype=np.dtype("<H"), converters={0:lambda s: int(s,2)})
+            # The CSV saver saves the bytes in memory order (generally, little-endian),
+            # which when parsed with int(s,2) will interpret the bytes backward.
+            # To make the converted data match, swap halves of the byte string.
+            conv = lambda s: int(s[8:] + s[:8], 2)
+            txtdata = np.loadtxt(fpath, dtype=np.dtype("<H"), converters={0:conv})
             b = bytes(txtdata)
 
             out.write(b)

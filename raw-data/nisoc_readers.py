@@ -4,6 +4,19 @@
 Routines to read nisoc raw data files (bin and csv) by word, byte, and bit.
 """
 
+import os
+from pathlib import Path
+
+def read_sector(dirpath, sector_address, mv):
+    """Read a sector at a given voltage. See read_file."""
+    # first try .bin
+    path = Path(dirpath) / f"data-{mv}-{sector_address}.bin"
+    if os.path.exists(path):
+        return read_bin(path)
+    path = Path(dirpath) / f"data-{mv}-{sector_address}.csv"
+    if os.path.exists(path):
+        return read_csv(path)
+
 def read_file(path):
     """Read a nisoc file by word (line). Yields the bits in each word as a list."""
     suffix = path.suffix.lower()
